@@ -3,3 +3,4 @@ request/
 __pycache__/
 *.pyc
 
+venv*
