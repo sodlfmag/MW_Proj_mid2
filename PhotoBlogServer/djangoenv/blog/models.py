@@ -17,7 +17,7 @@ class Post(models.Model):
         blank=True, null=True
     )
     image = models.ImageField(
-        upload_to='blog_image/%Y/%m/%d/',
+        upload_to='intruder_image/%Y/%m/%d/',
         blank=True,
         null=True
     )
