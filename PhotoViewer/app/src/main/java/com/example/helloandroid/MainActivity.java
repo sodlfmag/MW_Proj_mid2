@@ -39,8 +39,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
@@ -66,6 +71,9 @@ public class MainActivity extends AppCompatActivity {
     
     // Post 데이터 리스트
     private List<PostData> postDataList;
+    private List<PostData> allPostDataList;  // 필터링 전 전체 데이터
+    private Date filterStartDate = null;
+    private Date filterEndDate = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -183,6 +191,129 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(intent, REQUEST_IMAGE_PICK);
     }
     
+    public void onClickFilter(View v) {
+        showDateFilterDialog();
+    }
+    
+    private void showDateFilterDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("날짜 범위 선택");
+        
+        View view = getLayoutInflater().inflate(R.layout.dialog_date_filter, null);
+        
+        // 날짜 선택을 위한 Calendar 초기화
+        final Calendar startCalendar = Calendar.getInstance();
+        final Calendar endCalendar = Calendar.getInstance();
+        startCalendar.add(Calendar.DAY_OF_MONTH, -7); // 기본값: 7일 전
+        
+        // 날짜 표시용 TextView (간단한 구현)
+        TextView tvStartDate = view.findViewById(R.id.tvStartDate);
+        TextView tvEndDate = view.findViewById(R.id.tvEndDate);
+        
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+        tvStartDate.setText("시작: " + sdf.format(startCalendar.getTime()));
+        tvEndDate.setText("종료: " + sdf.format(endCalendar.getTime()));
+        
+        // 시작 날짜 선택
+        tvStartDate.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new android.app.DatePickerDialog(MainActivity.this,
+                    new android.app.DatePickerDialog.OnDateSetListener() {
+                        @Override
+                        public void onDateSet(android.widget.DatePicker view, int year, int month, int dayOfMonth) {
+                            startCalendar.set(year, month, dayOfMonth);
+                            tvStartDate.setText("시작: " + sdf.format(startCalendar.getTime()));
+                        }
+                    },
+                    startCalendar.get(Calendar.YEAR),
+                    startCalendar.get(Calendar.MONTH),
+                    startCalendar.get(Calendar.DAY_OF_MONTH)).show();
+            }
+        });
+        
+        // 종료 날짜 선택
+        tvEndDate.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                new android.app.DatePickerDialog(MainActivity.this,
+                    new android.app.DatePickerDialog.OnDateSetListener() {
+                        @Override
+                        public void onDateSet(android.widget.DatePicker view, int year, int month, int dayOfMonth) {
+                            endCalendar.set(year, month, dayOfMonth);
+                            tvEndDate.setText("종료: " + sdf.format(endCalendar.getTime()));
+                        }
+                    },
+                    endCalendar.get(Calendar.YEAR),
+                    endCalendar.get(Calendar.MONTH),
+                    endCalendar.get(Calendar.DAY_OF_MONTH)).show();
+            }
+        });
+        
+        builder.setView(view);
+        builder.setPositiveButton("적용", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                filterStartDate = startCalendar.getTime();
+                filterEndDate = endCalendar.getTime();
+                // 종료일은 하루 끝까지 포함
+                filterEndDate.setHours(23);
+                filterEndDate.setMinutes(59);
+                filterEndDate.setSeconds(59);
+                applyDateFilter();
+            }
+        });
+        builder.setNeutralButton("초기화", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                filterStartDate = null;
+                filterEndDate = null;
+                applyDateFilter();
+            }
+        });
+        builder.setNegativeButton("취소", null);
+        builder.show();
+    }
+    
+    private void applyDateFilter() {
+        if (allPostDataList == null || allPostDataList.isEmpty()) {
+            allPostDataList = postDataList != null ? new ArrayList<>(postDataList) : new ArrayList<>();
+        }
+        
+        if (filterStartDate == null && filterEndDate == null) {
+            // 필터 없음 - 전체 표시
+            postDataList = new ArrayList<>(allPostDataList);
+        } else {
+            // 날짜 필터 적용
+            postDataList = new ArrayList<>();
+            for (PostData post : allPostDataList) {
+                Date postDate = post.getCreatedDate();
+                if (postDate == null) continue;
+                
+                boolean matches = true;
+                if (filterStartDate != null && postDate.before(filterStartDate)) {
+                    matches = false;
+                }
+                if (filterEndDate != null && postDate.after(filterEndDate)) {
+                    matches = false;
+                }
+                
+                if (matches) {
+                    postDataList.add(post);
+                }
+            }
+        }
+        
+        // RecyclerView 업데이트
+        RecyclerView recyclerView = findViewById(R.id.recyclerView);
+        if (recyclerView != null && postDataList != null) {
+            ImageAdapter adapter = new ImageAdapter(postDataList);
+            recyclerView.setLayoutManager(new LinearLayoutManager(this));
+            recyclerView.setAdapter(adapter);
+            textView.setText("필터링된 이미지: " + postDataList.size() + "개");
+        }
+    }
+    
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -276,11 +407,24 @@ public class MainActivity extends AppCompatActivity {
                     }
                     
                     // 배열 내 모든 이미지 다운로드 및 메타데이터 저장
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
                     for (int i = 0; i < aryJson.length(); i++) {
                         post_json = (JSONObject) aryJson.get(i);
                         imageUrl = post_json.optString("image", null);
                         String title = post_json.optString("title", "");
                         String text = post_json.optString("text", "");
+                        String createdDateStr = post_json.optString("created_date", "");
+                        
+                        Date createdDate = null;
+                        if (!createdDateStr.isEmpty()) {
+                            try {
+                                // ISO 8601 형식 파싱 (예: "2025-11-17T23:27:30.369366+09:00")
+                                String dateStr = createdDateStr.split("\\+")[0].split("\\.")[0]; // 타임존 제거
+                                createdDate = sdf.parse(dateStr);
+                            } catch (ParseException e) {
+                                e.printStackTrace();
+                            }
+                        }
                         
                         if (imageUrl != null && !imageUrl.equals("null") && !imageUrl.isEmpty()) {
                             URL myImageUrl = new URL(imageUrl);
@@ -288,7 +432,7 @@ public class MainActivity extends AppCompatActivity {
                             InputStream imgStream = conn.getInputStream();
                             Bitmap imageBitmap = BitmapFactory.decodeStream(imgStream);
                             if (imageBitmap != null) {
-                                PostData postData = new PostData(imageBitmap, title, text, imageUrl);
+                                PostData postData = new PostData(imageBitmap, title, text, imageUrl, createdDate);
                                 postList.add(postData); // 포스트 데이터 리스트에 추가
                             }
                             imgStream.close();
@@ -305,6 +449,7 @@ public class MainActivity extends AppCompatActivity {
         protected void onPostExecute(List<PostData> posts) {
             progressBar.setVisibility(View.GONE);
             swipeRefreshLayout.setRefreshing(false);
+            allPostDataList = posts;  // 전체 데이터 저장
             postDataList = posts;
             Log.d(TAG, "CloadImage 완료. 데이터 개수: " + (posts != null ? posts.size() : 0));
             if (posts == null || posts.isEmpty()) {

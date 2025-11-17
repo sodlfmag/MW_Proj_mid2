@@ -13,14 +13,23 @@
         android:orientation="horizontal">
         <Button
             android:id="@+id/btn_load"
-            android:layout_width="198dp"
+            android:layout_width="0dp"
             android:layout_height="50dp"
+            android:layout_weight="1"
             android:onClick="onClickDownload"
             android:text="동기화" />
         <Button
-            android:id="@+id/btn_save"
-            android:layout_width="215dp"
+            android:id="@+id/btn_filter"
+            android:layout_width="0dp"
             android:layout_height="50dp"
+            android:layout_weight="1"
+            android:onClick="onClickFilter"
+            android:text="날짜 필터" />
+        <Button
+            android:id="@+id/btn_save"
+            android:layout_width="0dp"
+            android:layout_height="50dp"
+            android:layout_weight="1"
             android:onClick="onClickUpload"
             android:text="새로운 이미지 게시" />
     </LinearLayout>
